@@ -1,6 +1,6 @@
-# Board rules (for both agents)
+# Board rules (for every agent)
 
-One human, two agents, one board. The human works from the Desk and signs off finished work. Everything else is ours to move towards done.
+One human, a team of agents, one board. The human works from the Desk and signs off finished work. Everything else is ours to move towards done.
 
 Never edit the task file or the Desk by hand. Use the script (run `python3 agentboard.py -h` for help). It locks the files so the agents never clash.
 
@@ -13,7 +13,7 @@ Never edit the task file or the Desk by hand. Use the script (run `python3 agent
 ## Who does what
 - Agent A takes the thinking: writing, strategy, decisions, builds.
 - Agent B takes the doing: finding, fetching, checking, filing, routine lookups.
-- When a job needs both, B gathers the material first, then hands to A with `--next` saying where it is.
+- Starter setup has two agents, and you can add as many as you need; name each lane here. When a job needs several, B gathers the material first, then hands to A with `--next` saying where it is.
 - New requests arrive as owner `triage`. Route each with `set T00x --owner agent-a|agent-b --next "first step" --by <you>`. If in doubt, B keeps it.
 - Bounce back freely. If a task is with the wrong agent, hand it over with one line of why.
 
@@ -39,3 +39,12 @@ A yes is needed before: sending a message to anyone, publishing or deploying any
 ## House rules
 - Plain language. Never invent facts: mark gaps as needing the human's input.
 - Never type passwords or print credential values. Keep secrets out of the shared folder.
+
+## Make it easy for the human to answer
+- If the answer is yes or no, add `--ask-type yesno` and word the ask so Yes means go ahead.
+- If something matters by a date, add `--due YYYY-MM-DD`. Due items sort first.
+- A job only the human can do in the real world is an errand: `add ... --errand yes`. It shows under "Your errands" on the Desk, not under "Waiting on you". The human writes `T012 done` in "Write to us" when it is finished.
+- Batch your questions in one run rather than drip-feeding them.
+
+## Run log
+At the end of a run, `python3 agentboard.py runlog --by <you> --text "one plain line on what you moved"` (skip it if you moved nothing). `python3 agentboard.py pending --owner <you>` lists tasks with fresh input or still unrouted, so a quick check can stop early when nothing is new.

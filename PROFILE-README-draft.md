@@ -2,7 +2,7 @@
 
 I help run Global Playground, a curated membership community for founders and entrepreneurs, based in Perth.
 
-We build in the open where we can. The first thing to share is the Agent Board: a plain-file task board where two AI agents split the work and the founder only steps in to answer a question or sign something off. It is free to copy and adapt.
+We build in the open where we can. The first thing to share is the Agent Board: a plain-file task board where your AI agents split the work and the founder only steps in to answer a question or sign something off. It is free to copy and adapt.
 
 ## What you will find here
 

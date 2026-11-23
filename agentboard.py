@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Agent Board: a shared task board for one human and two AI agents.
+"""Agent Board: a shared task board for one human and any number of AI agents.
 
 tasks.js holds every task as JSON. DESK.md is the only file the human writes in.
 This script is the only thing that rewrites either file, and it takes a lock first,
-so the two agents never clash.
+so the agents never clash.
 
   python3 agentboard.py intake     read the Desk: new requests, answers, sign-offs
   python3 agentboard.py desk       rewrite the agent-managed parts of the Desk
@@ -15,11 +15,11 @@ so the two agents never clash.
 
 Statuses: working (an agent has it), waiting (needs the human: set --ask),
 signoff (done, human to close: set --result), parked (later), closed (signed off).
-Owners: the two agents (edit AGENTS below), triage (not yet routed), human.
+Owners: your agents (edit AGENTS below; any number), triage (not yet routed), human.
 """
 import json, os, re, sys, time, fcntl, argparse, datetime
 
-AGENTS = ("agent-a", "agent-b")   # rename to suit
+AGENTS = ("agent-a", "agent-b")   # rename to suit; add as many names as you have agents
 HERE = os.path.dirname(os.path.abspath(__file__))
 TASKS = os.path.join(HERE, "tasks.js")
 DESK = os.path.join(HERE, "DESK.md")
@@ -70,9 +70,22 @@ WAIT_H = "## Waiting on you"
 WAIT_HELP = "<!-- Type your answer after Answer:. Leave it blank if you are not ready. -->"
 SIGN_H = "## Ready to sign off"
 SIGN_HELP = "<!-- Tick the box to close a task. To send one back, leave it unticked and write what is wrong after Not yet:. -->"
+ERR_H = "## Your errands"
+ERR_HELP = "<!-- Real-world jobs only you can do. When one is done, write its number and done in Write to us, like T012 done. -->"
+DEC_H = "## Decided for you"
+DEC_HELP = "<!-- Small choices the agents made so they did not have to ask. To overturn one, write its number and what you want in Write to us. -->"
 DONE_H = "## Completed"
 DONE_HELP = "<!-- Finished work, newest first. -->"
 DONE_SHOW = 20
+
+def todays_decisions(tasks):
+    today = datetime.date.today().isoformat()
+    out = []
+    for t in tasks:
+        for e in t.get("log") or []:
+            if len(e) >= 3 and e[0].startswith(today) and e[2].lstrip().lower().startswith("decided:"):
+                out.append((t, e[1], e[2].lstrip()[8:].strip()))
+    return out
 
 def section(text, head):
     m = re.search(r"^" + re.escape(head) + r"\s*$(.*?)(?=^## |\Z)", text, re.S | re.M)
@@ -146,16 +159,30 @@ def cmd_intake(a):
 def write_desk(tasks, keep_write=True):
     old = open(DESK, encoding="utf-8").read() if os.path.exists(DESK) else ""
     kept = strip_comments(section(old, WRITE_H)).strip() if keep_write else ""
-    waiting = [t for t in tasks if t["status"] == "waiting"]
+    waiting = [t for t in tasks if t["status"] == "waiting" and not t.get("errand")]
+    errands = [t for t in tasks if t.get("errand") and t["status"] != "closed"]
     sign = [t for t in tasks if t["status"] == "signoff"]
     L = [HEAD, WRITE_H, WRITE_HELP, "", kept, "", "", WAIT_H, WAIT_HELP, ""]
     if not waiting: L += ["Nothing needs you right now.", ""]
     for t in waiting:
-        L += [f"### {t['id']} · {t['title']}", (t.get("ask") or t["detail"]), "", "Answer: ", ""]
+        due = f" (due {t['due']})" if t.get("due") else ""
+        yn = " Yes or no." if t.get("ask_type") == "yesno" and "yes or no" not in (t.get("ask") or "").lower() else ""
+        L += [f"### {t['id']} · {t['title']}{due}", (t.get("ask") or t["detail"]) + yn, "", "Answer: ", ""]
     L += [SIGN_H, SIGN_HELP, ""]
     if not sign: L += ["Nothing to sign off right now.", ""]
     for t in sign:
         L += [f"- [ ] {t['id']} · {t['title']}", f"    Done: {t.get('result') or 'see the board'}", "    Not yet: ", ""]
+    L += [ERR_H, ERR_HELP, ""]
+    if not errands: L += ["No errands for you right now.", ""]
+    for t in errands:
+        due = f" (due {t['due']})" if t.get("due") else ""
+        L += [f"- {t['id']} · {t['title']}{due}", f"    {t.get('ask') or t.get('next') or t['detail']}".rstrip(), ""]
+    L += [DEC_H, DEC_HELP, ""]
+    decs = todays_decisions(tasks)
+    if not decs: L += ["Nothing decided for you today.", ""]
+    for t, who, txt in decs:
+        L += [f"- {t['id']} · {t['title']} ({who}): {txt}"]
+    if decs: L += [""]
     L += [DONE_H, DONE_HELP, ""]
     closed = sorted([t for t in tasks if t["status"] == "closed"], key=lambda t: t.get("closed") or "")[::-1]
     if not closed: L += ["Nothing completed yet.", ""]
@@ -203,12 +230,21 @@ def cmd_list(a):
 def cmd_show(a):
     print(json.dumps(find(load(), a.id), indent=1, ensure_ascii=False))
 
-FIELDS = ["title", "area", "owner", "status", "detail", "next", "ask", "result", "source", "due"]
+FIELDS = ["title", "area", "owner", "status", "detail", "next", "ask", "result", "source", "ask_type", "due", "errand"]
+
+def norm_errand(v):
+    """errand is stored as "yes" or "" so older tasks without the field still work."""
+    if v is None: return None
+    v = v.strip().lower()
+    if v in ("yes", "y", "true", "1"): return "yes"
+    if v in ("no", "n", "false", "0", ""): return ""
+    sys.exit("--errand takes yes or no.")
 
 def cmd_add(a):
     with Locked():
         tasks = load()
         t = {"id": next_id(tasks), "answer": "", "created": now(), "updated": now(), "log": []}
+        a.errand = norm_errand(a.errand)
         for f in FIELDS: t[f] = getattr(a, f) or ""
         t["status"] = t["status"] or "working"
         log(t, a.by or t["owner"], a.note or "Added")
@@ -219,6 +255,7 @@ def cmd_set(a):
     if not (a.note or "").strip() or a.note.strip().lower() in ("updated", "update", "done"):
         sys.exit("Add --note saying what you actually did, so it shows on the card.")
     if not a.by: sys.exit("Add --by with your agent name.")
+    a.errand = norm_errand(a.errand)
     with Locked():
         tasks = load(); t = find(tasks, a.id)
         for f in FIELDS:
@@ -232,16 +269,34 @@ def cmd_set(a):
         save(tasks)
     print(t["id"], t["status"], t["owner"])
 
+RUNS = os.path.join(HERE, "runs.jsonl")
+
+def cmd_runlog(a):
+    """One plain line per run on what moved, so the human can see the board is alive."""
+    with open(RUNS, "a", encoding="utf-8") as f:
+        f.write(json.dumps([now(), a.by, a.text[:240]]) + "\n")
+    print("logged")
+
+def cmd_pending(a):
+    """Tasks with fresh input from the human, or new and unrouted, that this agent should act on."""
+    for t in load():
+        if t["status"] != "working": continue
+        last = (t.get("log") or [["", "", ""]])[-1]
+        if (t["owner"] == a.owner and last[1] == "human") or t["owner"] == "triage":
+            print(t["id"], t["title"][:60])
+
 p = argparse.ArgumentParser()
 s = p.add_subparsers(dest="cmd", required=True)
 s.add_parser("intake"); s.add_parser("desk")
+rl = s.add_parser("runlog"); rl.add_argument("--by", required=True); rl.add_argument("--text", required=True)
+pe = s.add_parser("pending"); pe.add_argument("--owner", required=True)
 c = s.add_parser("close"); c.add_argument("id"); c.add_argument("--by"); c.add_argument("--note")
 l = s.add_parser("list"); l.add_argument("--owner"); l.add_argument("--status")
 sh = s.add_parser("show"); sh.add_argument("id")
 for name in ("add", "set"):
     x = s.add_parser(name)
     if name == "set": x.add_argument("id"); x.add_argument("--clear-answer", action="store_true")
-    for f in FIELDS: x.add_argument("--" + f, dest=f)
+    for f in FIELDS: x.add_argument("--" + f.replace("_", "-"), dest=f)
     x.add_argument("--by"); x.add_argument("--note")
 a = p.parse_args()
-{"intake": cmd_intake, "desk": cmd_desk, "list": cmd_list, "show": cmd_show, "add": cmd_add, "set": cmd_set, "close": cmd_close}[a.cmd](a)
+{"intake": cmd_intake, "desk": cmd_desk, "list": cmd_list, "show": cmd_show, "add": cmd_add, "set": cmd_set, "close": cmd_close, "runlog": cmd_runlog, "pending": cmd_pending}[a.cmd](a)

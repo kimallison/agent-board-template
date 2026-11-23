@@ -4,3 +4,5 @@ DESK.md
 .desk_written
 *.tmp
 .env
+__pycache__/
+runs.jsonl

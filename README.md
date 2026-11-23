@@ -1,16 +1,17 @@
 # Agent Board template
 
-A shared task board for a founder and two AI agents, kept in plain files.
+A shared task board for a founder and a team of AI agents (two or more), kept in plain files.
 
 ## The idea
 
 Most founders end up with several AI tools and no single view of what each is doing. This board fixes that with a few rules:
 
-- One task list that every agent reads and writes through a locking script, so two agents never overwrite each other.
+- One task list that every agent reads and writes through a locking script, so agents never overwrite each other.
 - A Desk, a single page where you write requests in plain English, answer questions and tick off finished work.
-- A clear split of labour. One agent does the thinking and writing. The other does the finding, checking and filing.
+- A clear split of labour. In the starter setup one agent does the thinking and writing and another does the finding, checking and filing. Add a third or fourth agent with its own lane if you have one.
 - You only act when a task lands in "Waiting on you" or "Ready to sign off". Everything else keeps moving without you.
 - Outward steps (sending, publishing, spending, deleting) always wait for your yes.
+- Real-world jobs only you can do show up as errands, and small choices the agents made for you are listed so you can overturn them.
 
 ## What is in the box
 
@@ -21,7 +22,7 @@ Most founders end up with several AI tools and no single view of what each is do
 ## Getting started
 
 1. Copy `tasks.example.js` to `tasks.js` and delete the sample tasks, or keep them to see how it works.
-2. Rename `agent-a` and `agent-b` in the script and in `RULES.md` to match your own tools.
+2. Rename `agent-a` and `agent-b` in the script and in `RULES.md` to match your own tools. Have three or more? Add them to the `AGENTS` line near the top of the script and give each a lane in `RULES.md`.
 3. Point each agent at `RULES.md` and tell it to run `python3 agentboard.py intake` at the start of every run.
 4. Run `python3 agentboard.py desk` once to create `DESK.md`. Write a request under "Write to us", run `intake`, and watch it appear on the board.
 
